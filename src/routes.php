@@ -2,6 +2,8 @@
 
 use Slim\Http\Request;
 use Slim\Http\Response;
+use Respect\Validation\Validator as v;
+
 
 // Routes
 $app->get('/[{name}]', function (Request $request, Response $response, array $args) {
@@ -46,7 +48,7 @@ $app->post("/event/getinfo", function (Request $request, Response $response){
 	INNER JOIN tikets d ON d.id = a.id_tiket
 	WHERE e.id = :id_event and a.id_customer = :id_customer"; 
 	$stmt = $this->db->prepare($sql);
-	$stmt->bindValue( ":id_event", $new_event["id_event"], PDO::PARAM_STR );
+	$stmt->bindValue( ":id_event", $new_event["id_event"], PDO::PARAM_INT );
 	$stmt->bindValue( ":id_customer", $new_event["id_customer"], PDO::PARAM_INT );
 	$stmt->execute();
     $result = $stmt->fetchAll();
@@ -71,8 +73,8 @@ $app->post("/event/ticket/create", function (Request $request, Response $respons
 	$stmt = $this->db->prepare($sql1); 
 	$stmt->bindValue( ":nm_tiket", $new_event["nm_tiket"], PDO::PARAM_STR );
 	$stmt->bindValue( ":price", $new_event["price"], PDO::PARAM_INT );
-	$stmt->bindValue( ":quota", $new_event["quota"], PDO::PARAM_STR );
-	$stmt->bindValue( ":id_event", $new_event["id_event"], PDO::PARAM_STR );
+	$stmt->bindValue( ":quota", $new_event["quota"], PDO::PARAM_INT );
+	$stmt->bindValue( ":id_event", $new_event["id_event"], PDO::PARAM_INT );
 
 	 if($stmt->execute())
 	       return $response->withJson(["status" => "Ok"], 200);
@@ -81,18 +83,52 @@ $app->post("/event/ticket/create", function (Request $request, Response $respons
 });
 
 $app->post("/transaction/purchase", function (Request $request, Response $response){ 
-	$new_event = $request->getParsedBody();
-	$sql1 = "INSERT INTO transactions(nm_transaction, id_customer, id_event, id_tiket) VALUE (:nm_transaction, :id_customer, :id_event,:id_tiket)"; 
+	$post_event = $request->getParsedBody();
+	$count_event = count($post_event);
+	$c = 0;
+	//var_dump($count_event);die();
+	foreach($post_event as $new_event){
+		$c++;
+	$sql2 = "SELECT quota FROM tikets WHERE id = :id_tiket"; 
+	$stmt2 = $this->db->prepare($sql2); 
+	$stmt2->bindValue( ":id_tiket", $new_event["id_tiket"], PDO::PARAM_INT );
+	$stmt2->execute();
+	$result = $stmt2->fetchAll();
+	$cur_quota = $result[0]['quota'];
+	$count_quota = $cur_quota - $new_event["qty"]; 
+	// CHECK QUOTA LIMIT
+	if($count_quota < 0){
+		return $response->withJson(["status" => "Error", "transactions" => "Tiket Sold Out"], 200);
+
+	}elseif($new_event["source_event"] != $new_event["id_event"]){
+
+		return $response->withJson(["status" => "Error", "transactions" => "Event not authenticate"], 200);
+	}else{
+	$sql1 = "INSERT INTO transactions(nm_transaction, id_customer, id_event, id_tiket, qty) VALUE (:nm_transaction, :id_customer, :id_event,:id_tiket, :qty)"; 
 	$stmt = $this->db->prepare($sql1); 
 	$stmt->bindValue( ":nm_transaction", $new_event["nm_transaction"], PDO::PARAM_STR );
 	$stmt->bindValue( ":id_customer", $new_event["id_customer"], PDO::PARAM_INT );
-	$stmt->bindValue( ":id_event", $new_event["id_event"], PDO::PARAM_STR );
-	$stmt->bindValue( ":id_tiket", $new_event["id_tiket"], PDO::PARAM_STR );
+	$stmt->bindValue( ":id_event", $new_event["id_event"], PDO::PARAM_INT );
+	$stmt->bindValue( ":id_tiket", $new_event["id_tiket"], PDO::PARAM_INT );
+	$stmt->bindValue( ":qty", $new_event["qty"], PDO::PARAM_INT );
+	
 
 	 if($stmt->execute())
+	 	// UPDATE qty TIKET after Purchase
+	 	$sql3 = "UPDATE tikets SET quota = :final_quota WHERE id = :id_tiket";
+	 	$stmt3 = $this->db->prepare($sql3); 
+	 	$stmt3->bindValue( ":final_quota", $count_quota, PDO::PARAM_INT );
+	 	$stmt3->bindValue( ":id_tiket", $new_event["id_tiket"], PDO::PARAM_INT );
+	 	$stmt3->execute();
+	 	
+	 	if($c == $count_event){
 	       return $response->withJson(["status" => "Ok"], 200);
+	       return $response->withJson(["status" => "Error"], 200);
+	    }
 	    
-	    return $response->withJson(["status" => "Error"], 200);
+	}
+}
+	
 });
 
 $app->post("/transaction/get_info", function (Request $request, Response $response){
