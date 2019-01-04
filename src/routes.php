@@ -86,9 +86,10 @@ $app->post("/transaction/purchase", function (Request $request, Response $respon
 	$post_event = $request->getParsedBody();
 	$count_event = count($post_event);
 	$c = 0;
-	//var_dump($count_event);die();
+	
 	foreach($post_event as $new_event){
-		$c++;
+	$c++;
+
 	$sql2 = "SELECT quota FROM tikets WHERE id = :id_tiket"; 
 	$stmt2 = $this->db->prepare($sql2); 
 	$stmt2->bindValue( ":id_tiket", $new_event["id_tiket"], PDO::PARAM_INT );
@@ -96,6 +97,7 @@ $app->post("/transaction/purchase", function (Request $request, Response $respon
 	$result = $stmt2->fetchAll();
 	$cur_quota = $result[0]['quota'];
 	$count_quota = $cur_quota - $new_event["qty"]; 
+
 	// CHECK QUOTA LIMIT
 	if($count_quota < 0){
 		return $response->withJson(["status" => "Error", "transactions" => "Tiket Sold Out"], 200);
@@ -111,8 +113,6 @@ $app->post("/transaction/purchase", function (Request $request, Response $respon
 	$stmt->bindValue( ":id_event", $new_event["id_event"], PDO::PARAM_INT );
 	$stmt->bindValue( ":id_tiket", $new_event["id_tiket"], PDO::PARAM_INT );
 	$stmt->bindValue( ":qty", $new_event["qty"], PDO::PARAM_INT );
-	
-
 	 if($stmt->execute())
 	 	// UPDATE qty TIKET after Purchase
 	 	$sql3 = "UPDATE tikets SET quota = :final_quota WHERE id = :id_tiket";
